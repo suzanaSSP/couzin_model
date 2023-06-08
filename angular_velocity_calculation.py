@@ -21,7 +21,7 @@ vx = v0 * np.cos(theta)
 vy = v0 * np.sin(theta)
 
 # Information needed to calculate angular velocity. Sum of velocities, sum of scalar constant, etc.
-info_dict = {'scalar_constant': 0, 'info1': np.empty((2,2)), 'info2': np.empty((2,2)), 'info3': np.empty((2,2)), 'info4': np.empty((2,2))}
+info_dict = {'scalar_constant': 0, 'info1': np.empty((0,)), 'info2': np.empty((0,)), 'info3': np.empty((0,)), 'info4': np.empty((0,))}
 for i in range(1, N):
     # Turning x which is an array into a list, so I can create c which is the position of the agent. It'll be easier to do the equations    
     x_list = np.concatenate(x).tolist()
@@ -31,15 +31,9 @@ for i in range(1, N):
     
     info_dict['scalar_constant'] += math.dist(c_j, c_i)
     
-    # Sum needed for formula 5 and 7
-    info_dict['info1'] += (1/np.linalg.norm(info_dict['scalar_constant'])) * (c_j - c_i)
-    # Sum needed for formula 6
-    info_dict['info2'] += np.array([np.cos(theta), np.sin(theta)])
-    info_dict['info3'] += np.array([np.cos(theta)**2, np.sin(theta)**2])
-    # Sum needed for formula 7
-    info_dict['info4'] += c_j - c_i
+  
 
-print(info_dict)
+
 
 u1 = -1 * info_dict['info1']
 u3 = info_dict['info4']/info_dict['info1']
