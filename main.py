@@ -1,24 +1,23 @@
 import matplotlib.pyplot as plt
-import numpy as np
-import math
+import matplotlib.animation as animation
 import random
 from agent import Agent
-from typing import List
+import statistics
 
 # Simulation parameters
-L            = 100        # size of box
-R            = 0.5      # interaction radius
-dt           = 0.01      # time step
-Nt           = 200      # number of time steps
-N            = 100      # number of birds
+L            = 50       # size of box
+M            = L//4		# smaller box
+dt           = 0.001     # time step
+Nt           = 5000      # number of time steps
+N            = 100        # number of birds
 plotRealTime = True
 
 # Simulation Main Loop
 def main():
     
     # Create birds
-	agent = Agent(random.randint(1,(L/2)), random.randint(1,(L/2)))
-	agents = [Agent(random.randint(1,(L/2)), random.randint(1,(L/2))) for i in range(N)]
+	agent = Agent(random.randint(0,L), random.randint(0,L),)
+	agents = [Agent(random.randint(0,L),random.randint(0,L),) for i in range(20)]
 	foreigners = [other_agent for other_agent in agents if other_agent is not agent]
    
     # Prep figure
@@ -36,14 +35,21 @@ def main():
 		y = [agent.y for agent in agents]
 		vx = [agent.vx for agent in agents]
 		vy = [agent.vy for agent in agents]
+  
+		# apply periodic BCs
+		x = [i % L for i in x]
+		y = [i % L for i in y]
 
 		# plot in real time
 		if plotRealTime or (i == Nt-1):
+			# Clearing the axis and plotting again
 			plt.cla()
-			plt.quiver(x,y,vx,vy,color='r')
-			ax.set(xlim=(0, L), ylim=(0, L))
-			ax.set_aspect('equal')	
-			plt.pause(0.001)
+			ax.quiver(x,y,vx,vy,color='r')
+			# Limits
+			ax.set_xlim(0, L)
+			ax.set_ylim(0, L)
+			# Pause per frame
+			plt.pause(0.0001)
 	
 		# update velocities
 		for agent in agents:
