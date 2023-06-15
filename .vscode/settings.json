@@ -1,0 +1,9 @@
+{
+  "[python]": {
+    "editor.defaultFormatter": "vscode.simple-browser"
+  },
+  "settings": {
+  "python.formatting.provider": "none",
+  "editor.wordWrap": "off",
+  }
+}
