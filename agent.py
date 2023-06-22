@@ -3,74 +3,76 @@ import random
 from typing import List
 import math
 
-# TODO: ADJUST TO SCALE
 
 # Simulation parameters
 s            = 10      # Constant velocity
 Rr           = 300      # Repulsion radius
 Ro           = 400      # Orientation radius
 dt           = 0.5     # time step
-k            = 0.8     # scale for angular velocity calculation
+k            = 0.5     # scale for angular velocity calculation
 a            = 500      # agent is visible to other agent in time a
 L            = 2000    # Size of box
-
+N = 26
 
 # Deal with NaN bugs
 np.seterr(divide='ignore', invalid='ignore')
 
 class Agent:
     
-    def __init__(self,x,y) -> None:
+    def __init__(self, index, x,y, start_theta) -> None:
+        self.index = index
         self.x = x
         self.y = y
         self.c = np.array([self.x,self.y])
-        self.theta  = round(random.uniform(-math.pi, math.pi), 2)
+        self.theta  = start_theta % (2 * np.pi)
         
         self.vx = s * np.cos(self.theta)
         self.vy = s * np.sin(self.theta)
         self.v = np.array([np.cos(self.theta), np.sin(self.theta)])
 
-    def move(self):    
-        self.x = self.x + (self.vx * dt)
-        self.y = self.y + (self.vy * dt)
-       
-        self.vx = s * np.cos(self.theta)
-        self.vy = s * np.sin(self.theta)
         
-    def update_angular_velocity(self, foreigners):
-        stubborn_agent = StubbornAgent()
-        
-        repulsion_info = np.array([0.0, 0.0])
-        sum_of_V = np.array([0.0, 0.0])
-        sum_of_V_squared = np.array([0.0,0.0])
-        attraction_info = np.array([0.0, 0.0])
-
-        # Adding up all the distances and velocities of each agent, needed for calculating the next equations           
-        distance = math.dist(self.c, stubborn_agent.c)  
-
-        # Seeing if there are visible agents       
-        if a < distance:
-            attraction_info += (stubborn_agent.c - self.c)            
-    
-            # Radius of orientation
-            if np.linalg.norm(stubborn_agent.c - self.c) <= Ro:
-                sum_of_V += stubborn_agent.v
-                sum_of_V_squared  += (stubborn_agent.v **2)
+    def get_attractive_agents(self, attractive_agents):
+        attraction_info = np.array([0,0], dtype='float64')
+        for agent in attractive_agents:
+            attraction_info += (agent.c - self.c)
             
-            # Radius of repulsion    
-            if np.linalg.norm(stubborn_agent.c - self.c) <= Rr:
-                repulsion_info += (stubborn_agent.c - self.c)/(np.linalg.norm(stubborn_agent.c - self.c)**2)
-                  
-        repulsion_equation = repulsion_info
-        orientation_equation = (self.v + sum_of_V)/np.linalg.norm(self.v + sum_of_V_squared)
-        attraction_equation = attraction_info/np.linalg.norm(attraction_info)
+        return attraction_info/np.linalg.norm(attraction_info)
+                
+    def get_repulsion_agents(self, repulsion_agents):
+        repulsion_info = np.array([0,0], dtype='float64')
+        for agent in repulsion_agents:
+            distance = agent.c - self.c
+            repulsion_info += distance / (distance @ distance)
+            
+        return repulsion_info * -1
+                
+    def get_orientation_agents(self, orientation_agents):
+        orientation_info = np.array([0,0], dtype='float64')       
+        for agent in orientation_agents:
+            orientation_info += agent.v    
+            
+        norm = np.linalg.norm(orientation_info)    
+        return orientation_info / norm if norm > 0 else np.array([np.cos(self.theta + np.pi/2), np.sin(self.theta + np.pi/2)]) 
+                
+    def find_new_position(self, attractive_agents, repulsion_agents, orientation_agents):
+        Ur = self.get_repulsion_agents(repulsion_agents)
+        Uo = self.get_orientation_agents(orientation_agents)
+        Ua = self.get_attractive_agents(attractive_agents)
         
-        u = attraction_equation
+        u =  Ua 
+        w = k * (np.arctan2(u[1], u[0]) - self.theta)
         
-        w = k * ((((math.atan2(u[1], u[0]) - self.theta) + math.pi) % (2*math.pi))- math.pi)
-        
-        self.theta = self.theta + (dt * w)
-        
+        new_position = self.c + (s * self.v * dt)
+        new_theta = self.theta + (dt * w)
+        new_heading = np.array([np.cos(new_theta), np.sin(new_theta)])
+
+        return {'pos': new_position, 'theta': new_theta, 'heading': new_heading}
+    
+    def update(self, new_position, new_theta):
+        self.c = new_position
+        self.theta =  new_theta
+        self.v = np.array([np.cos(self.theta), np.sin(self.theta)])
+"""                
 class StubbornAgent(Agent):
 
     def __init__(self, x=L//2, y=L//2):
@@ -84,14 +86,17 @@ class StubbornAgent(Agent):
         self.theta = self.theta
      
 
-
-
-
-        
-
-
- 
+if __name__ == '__main__':
     
+    min_pos      = 750      # minimum position of birds
+    max_pos      = 1250     # max position of birds
+    agent = Agent(random.randint(min_pos, max_pos), random.randint(min_pos, max_pos))
+    agents = [Agent(random.randint(min_pos, max_pos), random.randint(min_pos, max_pos)) for i in range(N)]
+
+    for agent in agents:
+        agent.update_angular_velocity(agents)
+
+"""
         
 
 
