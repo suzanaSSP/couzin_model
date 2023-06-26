@@ -12,131 +12,143 @@ max_pos      = 1250     # max position of birds
 L            = 2000  	# size of box
 Nt           = 5000     # number of time steps
 N            = 20      	# number of birds
-plotRealTime = True
 
-# Agent parameters
-agents            = []
-dist_matrix       = np.zeros((N, N))
-visibility_matrix = np.zeros((N, N))
 
 # Formula paramenters
 Rr = 1
 Ro = 8
 a = 80
 
-# Visilibilty parameters
-repulsion_neighbors   = [[] for i in range(len(agents))]
-orientation_neighbors = [[] for i in range(len(agents))]
-attractive_neighbors  = [[] for i in range(len(agents))]
+# Deal with NaN bugs
+np.seterr(divide='ignore', invalid='ignore')
 
-def create_agents():
-	spawn_radius = np.random.uniform(min_pos, max_pos)
-	spawn_x_lb = - spawn_radius
-	spawn_x_ub = spawn_radius
-	spawn_y_lb = - spawn_radius
-	spawn_y_ub = spawn_radius
+class SimulationManager:
+    def __init__(self):
+        self.visibility_matrix = np.zeros((N, N))
+        self.dist_matrix = np.zeros((N, N))
+        self.agent_neighbors = {}
 
-	for i in range(N):
-		start_x = np.random.uniform(spawn_x_lb, spawn_x_ub)
-		start_y = np.random.uniform(spawn_y_lb, spawn_y_ub)
-		start_theta = np.random.uniform(-np.pi, np.pi)
-  
-		new_agent = Agent(i, start_x, start_y, start_theta)
+        self.agents = []
 
-		agents.append(new_agent)
-  
-	return agents
+        self.repulsion_neighbors   = [[] for _ in range(N)]
+        self.orientation_neighbors = [[] for _ in range(N)]
+        self.attraction_neighbors  = [[] for _ in range(N)]
 
-def update_dist():
-    for i in range(len(agents)):
-        for j in range(len(agents)):
-            distance = np.linalg.norm(agents[j].c -  agents[i].c)
+    def create_agents(self):
+        spawn_radius = np.random.uniform(min_pos, max_pos)
+        spawn_x_lb = -spawn_radius
+        spawn_x_ub = spawn_radius
+        spawn_y_lb = -spawn_radius
+        spawn_y_ub = spawn_radius
+        
+        for i in range(N):
+            start_x = np.random.uniform(spawn_x_lb, spawn_x_ub)
+            start_y = np.random.uniform(spawn_y_lb, spawn_y_ub)
+            start_theta = np.random.uniform(-np.pi, np.pi)
+    
+            new_agent = Agent(i, start_x, start_y, start_theta)
+            self.agents.append(new_agent)
+
+            if np.any(np.isnan(new_agent.c)):
+                i = 1
+
+        return self.agents
+
             
-            dist_matrix[i][j] = distance
-            dist_matrix[j][i] = distance
-
-def update_visibilities():
-    
-    update_dist()
-    for i in range(len(agents)):
-        for j in range(i + 1, len(agents)):
-            p = np.min([1, 1/dist_matrix[i][j]])
-
-            visibility_matrix[i][j] = bernoulli.rvs(p=p)
-            visibility_matrix[j][i] = bernoulli.rvs(p=p)
-
-            # if first neighbor can see the second, append to appropriate lists for the first neighbor depending on their distance
-            if visibility_matrix[i][j] == 1:
-                attractive_neighbors[i].append(agents[j])
+    def update_dist(self):
+        for i in range(len(self.agents)):
+            for j in range(i+1, len(self.agents)):
+                distance = np.linalg.norm(self.agents[j].c -  self.agents[i].c)
                 
-                if dist_matrix[i][j] < Rr:
-                    repulsion_neighbors[i].append(agents[j])
+                if np.isnan(distance):
+                    i = 1
+                self.dist_matrix[i][j] = distance
+                self.dist_matrix[j][i] = distance
 
-                if dist_matrix[i][j] < Ro:
-                    orientation_neighbors[i].append(agents[j])
-
-            # if second neighbor can see the first, append to appropriate lists for the second neighbor depending on their distance
-            if visibility_matrix[j][i] == 1:
-                attractive_neighbors[j].append(agents[i])
-                
-                if dist_matrix[i][j] < Rr:
-                    repulsion_neighbors[j].append(agents[i])
-
-                if dist_matrix[i][j] < Ro:
-                    orientation_neighbors[j].append(agents[i])
+    def add_agents_to_visibility(self):
         
-def update_agents():
-    update_visibilities()
+        self.update_dist()
+        for i in range(len(self.agents)):
+            for j in range(i + 1, len(self.agents)):
+                p_one_agent_sees_other = np.min([1, 1 / self.dist_matrix[i][j]])
+
+                if np.isnan(p_one_agent_sees_other):
+                    i = 1
+
+                self.visibility_matrix[i][j] = bernoulli.rvs(p=p_one_agent_sees_other)
+                self.visibility_matrix[j][i] = bernoulli.rvs(p=p_one_agent_sees_other)
+
+
+                # if first neighbor can see the second, append to appropriate lists for the first neighbor depending on their distance
+                if self.visibility_matrix[i][j] == 1:
+                    self.attraction_neighbors[i].append(self.agents[j])
+                    
+                    if self.dist_matrix[i][j] < Rr:
+                        self.repulsion_neighbors[i].append(self.agents[j])
+
+                    if self.dist_matrix[i][j] < Ro:
+                        self.orientation_neighbors[i].append(self.agents[j])
+
+                # if second neighbor can see the first, append to appropriate lists for the second neighbor depending on their distance
+                if self.visibility_matrix[j][i] == 1:
+                    self.attraction_neighbors[j].append(self.agents[i])
+                    
+                    if self.dist_matrix[i][j] < Rr:
+                        self.repulsion_neighbors[j].append(self.agents[i])
+
+                    if self.dist_matrix[i][j] < Ro:
+                        self.orientation_neighbors[j].append(self.agents[i])
+            
+    def update_agents(self):
+        self.add_agents_to_visibility()
+        
+        agents_to_update = []
+        for agent in self.agents:
+            a_neighbors = self.attraction_neighbors[agent.index]
+            r_neighbors = self.repulsion_neighbors[agent.index]
+            o_neighbors = self.orientation_neighbors[agent.index]
+            
+            agents_to_update.append(agent.find_new_position(a_neighbors, r_neighbors, o_neighbors))
+            
+        for agent in self.agents:
+            agent_updating = agents_to_update[agent.index]
+            agent.update(agent_updating['pos'], agent_updating['theta'])
+            
+        return agents_to_update
+
+
+    def animate(self, agent_positions):
+        fig, ax = plt.subplots()
+        for iter in agent_positions:
+            agent_xs, agent_ys = np.array([agent['pos'] for agent in iter]).T
+            agent_heading_xs, agent_heading_ys = np.array([agent['heading'] for agent in iter]).T / 2
+
+            plt.cla()
+            plt.quiver(agent_xs, agent_ys, agent_heading_xs, agent_heading_ys, color='blue')
+
+            avg_x = np.mean(agent_xs)
+            avg_y = np.mean(agent_ys)
+            ax.set(xlim=(avg_x - L / 2, avg_x + L / 2),
+                    ylim=(avg_y - L / 2, avg_y + L / 2))
+            ax.set_aspect('equal')
+            plt.pause(0.01)
+
+        np.array([agent['pos'] for agent in agent_positions[0]])
     
-    agents_to_update = []
-    for agent in agents:
-        attractive_neighbors = attractive_neighbors[agent.index]
-        repulsion_neighbors = repulsion_neighbors[agent.index]
-        orientation_neighbors = orientation_neighbors[agent.index]
-        
-        agents_to_update.append(agent.find_new_position(attractive_neighbors, repulsion_neighbors, orientation_neighbors))
-        
-    for agent in agents:
-        agent_updating = agent_updating[agent.index]
-        agent.update(agent_updating['pos'], agent_updating['theta'])
-        
-    return agents_to_update
 
+    def run_simulation(self, num_iters=10):
+        self.create_agents()
 
-def animate(agent_positions):
-	fig, ax = plt.subplots()
-	for iter in agent_positions:
-		agent_xs, agent_ys = np.array([agent['pos'] for agent in iter]).T
-		agent_heading_xs, agent_heading_ys = np.array([agent['heading'] for agent in iter]).T / 2
+        all_results = []
+        i = 0
+        for iter in tqdm.tqdm(range(num_iters), 'Running Simulation...'):
+            agent_positions = self.update_agents()
 
-		plt.cla()
-		plt.quiver(agent_xs, agent_ys, agent_heading_xs, agent_heading_ys, color='blue')
+            all_results.append(agent_positions)
+            i += 1
 
-		avg_x = np.mean(agent_xs)
-		avg_y = np.mean(agent_ys)
-		ax.set(xlim=(avg_x - L / 2, avg_x + L / 2),
-				ylim=(avg_y - L / 2, avg_y + L / 2))
-		ax.set_aspect('equal')
-		plt.pause(0.01)
+            if i > 400:
+                j = 1
 
-	np.array([agent['pos'] for agent in agent_positions[0]])
- 
+        return self.animate(all_results)
 
-def run_simulation(num_iters=10):
-	create_agents()
-
-	all_results = []
-	i = 0
-	for iter in tqdm.tqdm(range(num_iters), 'Running Simulation...'):
-		agent_positions = update_agents()
-
-		all_results.append(agent_positions)
-		i += 1
-
-		if i > 400:
-			j = 1
-
-	return animate(all_results)
-
-if __name__ == '__main__':
-    update_visibilities()

@@ -19,7 +19,7 @@ np.seterr(divide='ignore', invalid='ignore')
 
 class Agent:
     
-    def __init__(self, index, x,y, start_theta) -> None:
+    def __init__(self, index, x, y, start_theta):
         self.index = index
         self.x = x
         self.y = y
@@ -59,11 +59,12 @@ class Agent:
         Uo = self.get_orientation_agents(orientation_agents)
         Ua = self.get_attractive_agents(attractive_agents)
         
-        u =  Ua 
+        u =  Ur+ Uo + Ua 
         w = k * (np.arctan2(u[1], u[0]) - self.theta)
         
         new_position = self.c + (s * self.v * dt)
         new_theta = self.theta + (dt * w)
+      
         new_heading = np.array([np.cos(new_theta), np.sin(new_theta)])
 
         return {'pos': new_position, 'theta': new_theta, 'heading': new_heading}
